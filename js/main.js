@@ -33,8 +33,8 @@ async function initApp() {
         // Update latest data display
         updateLatestDataDisplay();
         
-        // Set default date range (2 weeks)
-        updateDateRange(14);
+        // Set default date range (3 months)
+        updateDateRange(90);
         
         // Set up event listeners
         setupEventListeners();
@@ -125,11 +125,11 @@ function initDatePickers() {
     endDateInput.min = formatDateForInput(earliestDate);
     endDateInput.max = formatDateForInput(latestDate);
     
-    // Set default values (last 2 weeks)
-    const twoWeeksAgo = new Date(latestDate);
-    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-    
-    startDateInput.value = formatDateForInput(twoWeeksAgo);
+    // Set default values (last 3 months)
+    const threeMonthsAgo = new Date(latestDate);
+    threeMonthsAgo.setDate(threeMonthsAgo.getDate() - 90);
+
+    startDateInput.value = formatDateForInput(threeMonthsAgo);
     endDateInput.value = formatDateForInput(latestDate);
 }
 
