@@ -9,6 +9,155 @@ class DataLoader {
         this.dataLoaded = false;
         this.dataFile = 'data/lake_data.csv';
     }
+    
+    /**
+     * Apply simple moving average smoothing
+     * @param {Array} data - Data to smooth
+     * @param {number} windowSize - Size of moving window (odd number)
+     * @returns {Array} Smoothed data
+     */
+    applyMovingAverage(data, windowSize) {
+        return data.map((point, index, array) => {
+            // Calculate window boundaries
+            const start = Math.max(0, index - Math.floor(windowSize/2));
+            const end = Math.min(array.length - 1, index + Math.floor(windowSize/2));
+            
+            // Get points in window
+            const windowPoints = array.slice(start, end + 1)
+                .filter(p => p.waterLevel !== null);
+            
+            if (windowPoints.length === 0) {
+                return {...point}; // Return copy of original point if no valid points
+            }
+            
+            // Calculate average
+            const sum = windowPoints.reduce((acc, p) => acc + p.waterLevel, 0);
+            const avg = sum / windowPoints.length;
+            
+            return {
+                timestamp: point.timestamp,
+                waterLevel: avg,
+                isSmoothed: true
+            };
+        });
+    }
+    
+    /**
+     * Downsample data using LTTB algorithm
+     * @param {Array} data - Data to downsample
+     * @param {number} threshold - Target number of points
+     * @returns {Array} Downsampled data
+     */
+    downsampleLTTB(data, threshold) {
+        if (data.length <= threshold || threshold <= 2) return data;
+        
+        const result = [];
+        // Always include first point
+        result.push(data[0]);
+        
+        // Bucket size
+        const bucketSize = (data.length - 2) / (threshold - 2);
+        
+        let lastSelectedIndex = 0;
+        for (let i = 0; i < threshold - 2; i++) {
+            // Calculate bucket boundaries
+            const startIndex = Math.floor((i + 0) * bucketSize) + 1;
+            const endIndex = Math.floor((i + 1) * bucketSize) + 1;
+            const nextEndIndex = Math.floor((i + 2) * bucketSize) + 1;
+            
+            // Find point in this bucket with largest triangle area
+            let maxArea = -1;
+            let maxAreaIndex = startIndex;
+            
+            const a = data[lastSelectedIndex]; // Last selected point
+            
+            // For each point in current bucket
+            for (let j = startIndex; j < endIndex; j++) {
+                // Skip points with null values
+                if (data[j].waterLevel === null) continue;
+                
+                // For each point in next bucket
+                let nextBucketSum = 0;
+                let nextBucketCount = 0;
+                
+                for (let k = endIndex; k < nextEndIndex && k < data.length; k++) {
+                    if (data[k].waterLevel !== null) {
+                        nextBucketSum += data[k].waterLevel;
+                        nextBucketCount++;
+                    }
+                }
+                
+                // If no valid points in next bucket, use last point
+                const c = nextBucketCount > 0 
+                    ? { timestamp: new Date((endIndex + nextEndIndex) / 2), 
+                        waterLevel: nextBucketSum / nextBucketCount } 
+                    : data[Math.min(data.length - 1, nextEndIndex)];
+                
+                // Current point
+                const b = data[j];
+                
+                // Calculate triangle area
+                const area = Math.abs(
+                    (a.timestamp - c.timestamp) * (b.waterLevel - a.waterLevel) -
+                    (a.timestamp - b.timestamp) * (c.waterLevel - a.waterLevel)
+                ) * 0.5;
+                
+                // Update if this triangle has larger area
+                if (area > maxArea) {
+                    maxArea = area;
+                    maxAreaIndex = j;
+                }
+            }
+            
+            // Add point with largest triangle area
+            result.push(data[maxAreaIndex]);
+            lastSelectedIndex = maxAreaIndex;
+        }
+        
+        // Always include last point
+        result.push(data[data.length - 1]);
+        
+        return result;
+    }
+    
+    /**
+     * Get adaptively processed data based on time range
+     * @param {Array} data - Original data array
+     * @param {number} days - Number of days in view
+     * @param {boolean} smoothingEnabled - Whether to apply smoothing
+     * @param {boolean} showAllPoints - Override to show all points
+     * @returns {Array} Processed data
+     */
+    getAdaptiveData(data, days, smoothingEnabled, showAllPoints) {
+        if (showAllPoints) {
+            return data;
+        }
+        
+        // Determine appropriate sampling based on time range
+        let processedData = data;
+        
+        // Apply downsampling for longer time ranges
+        if (days > 90) {
+            // For very long ranges (3+ months)
+            processedData = this.downsampleLTTB(data, 300);
+        } else if (days > 30) {
+            // For medium ranges (1-3 months)
+            processedData = this.downsampleLTTB(data, 500);
+        } else if (days > 7) {
+            // For shorter ranges (1-4 weeks)
+            processedData = this.downsampleLTTB(data, 1000);
+        }
+        
+        // Apply smoothing if enabled
+        if (smoothingEnabled) {
+            // Window size depends on data density and time range
+            // Larger window = smoother curve
+            const windowSize = Math.max(3, Math.min(11, Math.ceil(days / 7) * 2 + 1));
+            processedData = this.applyMovingAverage(processedData, windowSize);
+        }
+        
+        return processedData;
+    }
 
     /**
      * Load CSV data from file

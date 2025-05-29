@@ -8,6 +8,8 @@ const startDateInput = document.getElementById('startDate');
 const endDateInput = document.getElementById('endDate');
 const applyCustomRangeBtn = document.getElementById('applyCustomRange');
 const showAverageCheckbox = document.getElementById('showAverage');
+const enableSmoothingCheckbox = document.getElementById('enableSmoothing');
+const showAllPointsCheckbox = document.getElementById('showAllPoints');
 const minValueElement = document.getElementById('minValue');
 const maxValueElement = document.getElementById('maxValue');
 const avgValueElement = document.getElementById('avgValue');
@@ -17,6 +19,8 @@ const latestLevelElement = document.getElementById('latestLevel');
 // Current state
 let currentData = [];
 let statistics = { min: 0, max: 0, avg: 0 };
+let smoothingEnabled = true;
+let showAllPoints = false;
 
 /**
  * Initialize the application
@@ -61,6 +65,18 @@ function setupEventListeners() {
     // Average line toggle
     showAverageCheckbox.addEventListener('change', (e) => {
         waterLevelChart.toggleAverageLine(e.target.checked, statistics.avg);
+    });
+    
+    // Smoothing toggle
+    enableSmoothingCheckbox.addEventListener('change', (e) => {
+        smoothingEnabled = e.target.checked;
+        updateChart();
+    });
+    
+    // Show all points toggle
+    showAllPointsCheckbox.addEventListener('change', (e) => {
+        showAllPoints = e.target.checked;
+        updateChart();
     });
 }
 
@@ -123,7 +139,11 @@ function initDatePickers() {
  */
 function updateDateRange(days) {
     // Get filtered data
-    currentData = dataLoader.getFilteredData(days);
+    const filteredData = dataLoader.getFilteredData(days);
+    
+    // Apply adaptive data processing
+    const daysValue = days === 'all' ? 365 * 10 : parseInt(days); // Use large value for 'all'
+    currentData = dataLoader.getAdaptiveData(filteredData, daysValue, smoothingEnabled, showAllPoints);
     
     // Update chart
     waterLevelChart.updateChart(currentData);
@@ -138,6 +158,15 @@ function updateDateRange(days) {
     
     // Update latest data display
     updateLatestDataDisplay();
+}
+
+/**
+ * Update the chart with current settings
+ */
+function updateChart() {
+    // Get the current time range in days
+    const days = timeRangeSelect.value;
+    updateDateRange(days);
 }
 
 /**
@@ -157,7 +186,13 @@ function applyCustomDateRange() {
     }
     
     // Get data for custom range
-    currentData = dataLoader.getCustomRangeData(startDate, endDate);
+    const filteredData = dataLoader.getCustomRangeData(startDate, endDate);
+    
+    // Calculate days between dates for adaptive processing
+    const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+    
+    // Apply adaptive data processing
+    currentData = dataLoader.getAdaptiveData(filteredData, daysDiff, smoothingEnabled, showAllPoints);
     
     // Update chart
     waterLevelChart.updateChart(currentData);

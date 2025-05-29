@@ -52,26 +52,32 @@ class WaterLevelChart {
         // Prepare data for Plotly
         const timestamps = this.currentData.map(item => item.timestamp);
         const waterLevels = this.currentData.map(item => item.waterLevel);
-
+        
+        // Determine if data is smoothed
+        const isSmoothed = this.currentData.some(d => d.isSmoothed);
+        
         // Create traces for the chart
         const traces = [
             {
                 x: timestamps,
                 y: waterLevels,
                 type: 'scatter',
-                mode: 'lines+markers',
+                mode: isSmoothed ? 'lines' : 'lines+markers',
                 name: 'Water Level',
                 line: {
                     color: '#0d6efd',
-                    width: 2
+                    width: 2,
+                    shape: isSmoothed ? 'spline' : 'linear'
                 },
                 marker: {
-                    size: 5,
+                    size: 4,
                     opacity: 0.7
                 },
                 hovertemplate: 
                     '<b>Date:</b> %{x|%Y-%m-%d %H:%M}<br>' +
-                    '<b>Water Level:</b> %{y:.2f} ft<extra></extra>'
+                    '<b>Water Level:</b> %{y:.2f} ft' +
+                    (isSmoothed ? ' (smoothed)' : '') +
+                    '<extra></extra>'
             }
         ];
 
