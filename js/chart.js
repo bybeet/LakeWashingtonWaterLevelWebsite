@@ -114,7 +114,8 @@ class WaterLevelChart {
                 title: 'Water Level (feet)',
                 showgrid: true,
                 gridcolor: '#e9ecef',
-                zeroline: false
+                zeroline: false,
+                range: [19, 23]  // Set fixed bounds for y-axis
             },
             hoverlabel: {
                 bgcolor: '#fff',
