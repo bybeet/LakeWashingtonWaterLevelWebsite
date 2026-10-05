@@ -1,3 +1,10 @@
 .DS_Store
 data.csv
 Main.dc.html
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform.tfstate.lock.info
