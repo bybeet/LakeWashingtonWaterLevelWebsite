@@ -563,23 +563,25 @@ function renderRecords(D, S) {
     <span class="rec-sub">${esc(r.sub)}</span><span class="rec-when">${esc(r.when)}</span></div>`).join('');
 }
 
-function renderStorms(D, S) {
+// Largest 3-day moves in direction dir (+1 rises, −1 drops), at least 15 days
+// apart, skipping moves that end inside the [from, to] calendar window.
+function renderMoves(D, id, dir, skip) {
   const { v, t, N, key } = D;
-  const [ex0, ex1] = REFILL_RISES.map(keyAt);
+  const [ex0, ex1] = skip ? skip.map(keyAt) : [Infinity, -Infinity];
   const picks = [], used = new Array(N).fill(false);
   for (let r = 0; r < 8; r++) {
     let best = -1, bv = -Infinity;
     for (let i = 3; i < N; i++) {
       if (used[i] || (key[i] >= ex0 && key[i] <= ex1)) continue;
-      const d = v[i] - v[i - 3];
+      const d = dir * (v[i] - v[i - 3]);
       if (d > bv) { bv = d; best = i; }
     }
     if (best < 0 || bv <= 0) break;
     picks.push(best);
     for (let i = Math.max(0, best - 15); i < Math.min(N, best + 16); i++) used[i] = true;
   }
-  $('firstYear').textContent = S.firstYear;
-  $('storms').innerHTML = picks.map((i) => {
+  const color = dir > 0 ? '#1D5FA6' : '#B05410';
+  $(id).innerHTML = picks.map((i) => {
     const s0 = Math.max(0, i - 7), s1 = Math.min(N - 1, i + 13);
     const seg = v.slice(s0, s1 + 1);
     const lo = Math.min(...seg), hi = Math.max(...seg);
@@ -587,18 +589,27 @@ function renderStorms(D, S) {
     const spark = seg.map((x, j) => (j ? 'L' : 'M') + sx(j) + ' ' + sy(x)).join('');
     let hl = '';
     for (let k = i - 3; k <= i; k++) if (k >= s0) hl += (hl ? 'L' : 'M') + sx(k - s0) + ' ' + sy(v[k]);
-    // First day the lake is back within 0.03 ft of where the rise started.
+    // First day the lake is back within 0.03 ft of where the move started.
     let back = i;
-    while (back < N - 1 && back < i + 90 && v[back] > v[i - 3] + 0.03) back++;
-    const tail = back >= N - 1 ? 'still elevated' : back >= i + 90 ? 'stayed up 90+ days' : 'back down in ' + (back - i) + ' days';
+    while (back < N - 1 && back < i + 90 && dir * (v[back] - v[i - 3]) > 0.03) back++;
+    const tail = back >= N - 1 ? (dir > 0 ? 'still elevated' : 'still low')
+      : back >= i + 90 ? (dir > 0 ? 'stayed up' : 'stayed down') + ' 90+ days'
+      : (dir > 0 ? 'back down' : 'back up') + ' in ' + (back - i) + ' days';
     return `<div class="storm">
-      <div class="storm-head"><span class="storm-date">${fd(t[i - 3])}</span><span class="storm-rise">${sg(v[i] - v[i - 3])} ft</span></div>
+      <div class="storm-head"><span class="storm-date">${fd(t[i - 3])}</span><span class="storm-rise${dir > 0 ? '' : ' drop'}">${sg(v[i] - v[i - 3])} ft</span></div>
       <svg viewBox="0 0 120 40" preserveAspectRatio="none" aria-hidden="true">
         <path d="${spark}" fill="none" stroke="#8A99A2" stroke-width="1.5" vector-effect="non-scaling-stroke"></path>
-        <path d="${hl}" fill="none" stroke="#1D5FA6" stroke-width="3" vector-effect="non-scaling-stroke"></path>
+        <path d="${hl}" fill="none" stroke="${color}" stroke-width="3" vector-effect="non-scaling-stroke"></path>
       </svg>
       <span class="storm-sub">${v[i - 3].toFixed(2)} → ${v[i].toFixed(2)} ft · ${tail}</span></div>`;
   }).join('');
+}
+
+function renderStorms(D, S) {
+  $('firstYear').textContent = S.firstYear;
+  $('dropsFirstYear').textContent = S.firstYear;
+  renderMoves(D, 'storms', 1, REFILL_RISES);
+  renderMoves(D, 'drops', -1);
 }
 
 // ---------- boot ----------

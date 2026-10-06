@@ -148,6 +148,7 @@ h1 { font-size: 40px; font-weight: 800; font-stretch: 80%; letter-spacing: -0.01
 .storm-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .storm-date { font-family: var(--mono); font-size: 13px; color: var(--muted); }
 .storm-rise { font-size: 28px; font-weight: 700; font-stretch: 75%; color: var(--blue); }
+.storm-rise.drop { color: var(--orange); }
 .storm svg { width: 100%; height: 56px; }
 .storm-sub { font-size: 13px; color: var(--muted); }
 
