@@ -193,8 +193,8 @@ function renderHero(D, S) {
   const ch = wk == null ? 0 : D.v[L] - wk;
   const dir = ch < -0.01 ? 'falling' : ch > 0.01 ? 'rising' : 'holding steady';
   const toFull = (SUMMER_FT - cur) * 12, aboveWinter = (cur - WINTER_FT) * 12;
-  const a = toFull >= 0 ? toFull.toFixed(1) + ' in below summer full' : (-toFull).toFixed(1) + ' in above summer full';
-  const b = aboveWinter >= 0 ? aboveWinter.toFixed(1) + ' in above the winter hold' : (-aboveWinter).toFixed(1) + ' in below the winter hold';
+  const a = toFull >= 0 ? toFull.toFixed(1) + ' inches below summer full' : (-toFull).toFixed(1) + ' inches above summer full';
+  const b = aboveWinter >= 0 ? aboveWinter.toFixed(1) + ' inches above the winter hold' : (-aboveWinter).toFixed(1) + ' inches below the winter hold';
   $('heroLine').textContent = 'The lake is ' + dir + '. It sits ' + a + ' and ' + b + '.';
 
   // Staff gauge: 19.5–22.5 ft over the 310px board.
@@ -455,7 +455,7 @@ function renderAhead(D, S) {
   const md = ([m, d]) => M[m] + ' ' + d;
   const ms = [
     { k: kDec, when: md(WINTER_REACHED), title: 'Winter hold reached', sub: inDays(kDec) + ' · about ' + inches(pDec - cur), level: '≈' + pDec.toFixed(1) + ' ft' },
-    { k: kDec + 14, when: 'Dec–Feb', title: 'Lowest water of the year', sub: 'Best window for underwater work. Storms can add 0.2–0.5 ft for a few days.', level: '≈' + WINTER_FT.toFixed(1) + ' ft' },
+    { k: kDec + 14, when: 'Dec–Feb', title: 'Lowest water of the year', sub: 'Storms can add 0.2–0.5 ft for a few days.', level: '≈' + WINTER_FT.toFixed(1) + ' ft' },
     { k: kFeb, when: md(REFILL_START), title: 'Spring refill begins', sub: inDays(kFeb) + ' · the Locks start holding water back', level: WINTER_FT.toFixed(1) + ' ↑' },
     { k: kMay, when: md(SUMMER_FULL), title: 'Summer full', sub: inDays(kMay) + ' · about ' + inches(SUMMER_FT - cur) + '. Date varies with snowpack.', level: SUMMER_FT.toFixed(1) + ' ft' }
   ].sort((a, b) => a.k - b.k);
