@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Upload the site files to the S3 bucket that also holds the live data.csv.
 #
-#   ./deploy.sh            upload index.html, app.js, styles.css
+#   ./deploy.sh            upload index.html, app.js, styles.css, favicon.svg
 #   ./deploy.sh --dry-run  show what would be uploaded
 #
 # Only the files in SITE_FILES are ever uploaded. data.csv in the bucket is
@@ -10,7 +10,7 @@ set -euo pipefail
 
 BUCKET="lake-washington-water-level-823580404672"
 REGION="us-west-2"
-SITE_FILES=(index.html app.js styles.css)
+SITE_FILES=(index.html app.js styles.css favicon.svg)
 
 DRYRUN=""
 case "${1:-}" in
@@ -40,6 +40,7 @@ content_type() {
     *.html) echo "text/html; charset=utf-8" ;;
     *.js)   echo "text/javascript; charset=utf-8" ;;
     *.css)  echo "text/css; charset=utf-8" ;;
+    *.svg)  echo "image/svg+xml" ;;
   esac
 }
 
