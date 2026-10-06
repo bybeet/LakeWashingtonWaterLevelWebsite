@@ -466,9 +466,9 @@ function renderChanges(D, S) {
 }
 
 function renderN(D, S, n) {
-  const nn = Math.min(Math.max(1, n), S.L);
+  const nn = Math.min(Math.max(1, n), S.L, 365);
   const from = D.v[S.L - nn];
-  $('nLabel').textContent = nn === 1 ? '1 day' : nn >= 730 ? nn + ' days (' + (nn / 365.25).toFixed(1) + ' yr)' : nn % 7 === 0 ? nn + ' days (' + nn / 7 + ' wk)' : nn + ' days';
+  $('nLabel').textContent = nn === 1 ? '1 day' : nn % 7 === 0 ? nn + ' days (' + nn / 7 + ' wk)' : nn + ' days';
   $('nDelta').textContent = sg(S.cur - from);
   $('nFrom').textContent = 'From ' + from.toFixed(2) + ' ft on ' + fd(D.t[S.L - nn]) + ' to ' + S.cur.toFixed(2) + ' ft now';
 }
@@ -657,7 +657,7 @@ function start(D) {
   draw();
 
   const slider = $('ndays');
-  slider.max = String(S.L);
+  slider.max = String(Math.min(365, S.L));
   slider.value = String(Math.min(14, S.L));
   slider.addEventListener('input', () => renderN(D, S, parseInt(slider.value, 10) || 1));
   renderN(D, S, +slider.value);
