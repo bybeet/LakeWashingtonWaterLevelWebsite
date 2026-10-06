@@ -6,7 +6,7 @@ data "aws_s3_bucket" "site" {
 
 locals {
   # The only objects CloudFront may read. backup/ and data.json stay private.
-  public_objects = ["index.html", "app.js", "styles.css", "data.csv"]
+  public_objects = ["index.html", "app.js", "styles.css", "favicon.svg", "data.csv"]
 }
 
 # ── Certificate ──────────────────────────────────────────────────────────────
