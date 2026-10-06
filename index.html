@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lake Washington water level</title>
-<meta name="description" content="Current Lake Washington / Lake Union water level at the Ballard Locks, with history, seasonal comparison and a 12-week outlook.">
+<meta name="description" content="Current Lake Washington / Lake Union water level at the Ballard Locks, with 25 years of history, records and a 12-week outlook.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
@@ -26,6 +26,7 @@
   </div>
 </header>
 
+<div id="loading" class="mono loading">Loading readings since 2001…</div>
 <div id="error" class="error" hidden></div>
 
 <main id="app" class="stack-24" hidden>
@@ -49,7 +50,7 @@
     <p class="hero-line" id="heroLine"></p>
   </div>
   <div class="gauge-wrap">
-    <svg id="gauge" viewBox="0 0 200 330" width="250" height="412" role="img" aria-label="Staff gauge showing the current lake level between the winter hold and summer full marks"></svg>
+    <svg id="gauge" viewBox="0 0 220 330" width="264" height="396" role="img" aria-label="Staff gauge showing the current lake level between the winter hold and typical summer full marks"></svg>
   </div>
 </section>
 
@@ -63,6 +64,16 @@
     <div class="ranges" role="group" aria-label="Time range" id="ranges"></div>
   </div>
 
+  <div class="year-row" id="yearRow" hidden>
+    <span class="k">Highlight a year</span>
+    <div class="stepper">
+      <button type="button" id="prevYear" aria-label="Previous year"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 3L5 8l5 5"></path></svg></button>
+      <span class="mono hy" id="hyLabel" aria-live="polite"></span>
+      <button type="button" id="nextYear" aria-label="Next year"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3l5 5-5 5"></path></svg></button>
+    </div>
+    <span class="k" id="hyNote"></span>
+  </div>
+
   <div class="readout-row">
     <div class="mono readout" id="readout"></div>
     <span class="mono hint">Hover the chart to read any day</span>
@@ -74,8 +85,9 @@
       <div id="mainGrid"></div>
       <svg viewBox="0 0 1000 300" preserveAspectRatio="none" class="plot-svg" aria-hidden="true">
         <path id="pBand" fill="#1D5FA6" opacity="0.12"></path>
-        <path id="pR" fill="none" stroke="#10222F" stroke-width="1.25" stroke-dasharray="2 4" vector-effect="non-scaling-stroke"></path>
-        <path id="pC" fill="none" stroke-width="1.5" vector-effect="non-scaling-stroke"></path>
+        <path id="pG" fill="none" stroke="#B4C0C6" stroke-width="1" vector-effect="non-scaling-stroke"></path>
+        <path id="pC" fill="none" stroke="#10222F" stroke-width="1.5" stroke-dasharray="1.5 3.5" vector-effect="non-scaling-stroke"></path>
+        <path id="pH" fill="none" stroke="#10222F" stroke-width="2" vector-effect="non-scaling-stroke"></path>
         <path id="pB" fill="none" stroke="#B05410" stroke-width="1.75" vector-effect="non-scaling-stroke"></path>
         <path id="pA" fill="none" stroke="#1D5FA6" stroke-width="2.5" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
       </svg>
@@ -115,7 +127,7 @@
   <div class="card stack-18">
     <div class="stack-4">
       <h2>The next 12 weeks</h2>
-      <span class="muted">Projected from the seasonal operating schedule. Rain can push it higher.</span>
+      <span class="muted" id="aheadNote"></span>
     </div>
     <div class="chart-grid ahead-grid">
       <div class="ylabels" id="aheadY"></div>
@@ -136,11 +148,20 @@
   </div>
 </section>
 
+<!-- Records -->
+<section class="card stack-18">
+  <div class="card-head baseline">
+    <h2>Records</h2>
+    <span class="muted" id="recordsSpan"></span>
+  </div>
+  <div class="records" id="records"></div>
+</section>
+
 <!-- Storms -->
 <section class="card stack-18">
   <div class="card-head baseline">
     <h2>Biggest rain-driven rises</h2>
-    <span class="muted">Largest 3-day jumps outside the spring refill, with the 3 weeks around each</span>
+    <span class="muted">Largest 3-day jumps since <span id="firstYear"></span> outside the spring refill, with the 3 weeks around each</span>
   </div>
   <div class="storms" id="storms"></div>
 </section>
@@ -148,7 +169,7 @@
 </main>
 
 <footer class="foot">
-  <span class="foot-text" id="footText">Daily lake elevation in feet as reported by the U.S. Army Corps of Engineers for the Lake Washington Ship Canal, in Corps project datum (22 ft = 18.75 ft NAVD88). Hourly readings are averaged per day.</span>
+  <span class="foot-text">Lake elevation in feet from U.S. Army Corps of Engineers hourly readings at the Lake Washington Ship Canal, in Corps project datum (22 ft = 18.75 ft NAVD88), averaged to daily values (Pacific time). Two one-hour glitches in Dec 2002 were removed. “Typical” and percentile bands use every year before this one.</span>
   <span class="mono"><a href="https://water.sec.usace.army.mil/overview/nws/locations/lwsc" rel="noopener">USACE Water Data · Lake Washington Ship Canal</a></span>
 </footer>
 
