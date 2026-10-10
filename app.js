@@ -31,6 +31,7 @@ const MIN_PLAUSIBLE_FT = 19.5;
 const SPIKE_FT = 0.25;
 
 const DAY = 86400000;
+const HOUR = 3600000;
 const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const H = 300;
 const BLUE = '2.5px solid #1D5FA6', ORANGE_D = '2px dashed #B05410', ORANGE = '2px solid #B05410', INK = '2px solid #10222F',
@@ -39,6 +40,7 @@ const BLUE = '2.5px solid #1D5FA6', ORANGE_D = '2px dashed #B05410', ORANGE = '2
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fd = (ti) => { const d = new Date(ti); return M[d.getUTCMonth()] + ' ' + d.getUTCDate() + ', ' + d.getUTCFullYear(); };
+const fh = (ti) => { const d = new Date(ti), h = d.getUTCHours(); return fd(ti) + ', ' + (h % 12 || 12) + ' ' + (h < 12 ? 'AM' : 'PM'); };
 const fs = (ti) => { const d = new Date(ti); return M[d.getUTCMonth()] + ' ' + d.getUTCDate(); };
 const sg = (x, p = 2) => (x > 0.004 ? '+' : x < -0.004 ? '−' : '±') + Math.abs(x).toFixed(p);
 const ft = (x) => x == null ? '—' : x.toFixed(2) + ' ft';
@@ -332,16 +334,47 @@ function renderTiles(D, S) {
     <span class="tile-sub">${esc(tl.sub)}</span></div>`).join('');
 }
 
+// The last 7 days of readings on an even hourly grid. Gaps of up to 3 hours are
+// filled in linearly; longer ones break the line.
+function hourlyWeek(rows) {
+  const n = 7 * 24 + 1, st = Math.floor(rows[rows.length - 1].at / HOUR) - n + 1;
+  const sum = new Array(n).fill(0), cnt = new Array(n).fill(0);
+  for (let r = rows.length - 1; r >= 0; r--) {
+    const h = Math.floor(rows[r].at / HOUR) - st;
+    if (h < 0) break;
+    sum[h] += rows[r].val; cnt[h]++;
+  }
+  const a = cnt.map((c, h) => (c ? Math.round(sum[h] / c * 100) / 100 : null));
+  for (let h = 1; h < n; h++) {
+    if (a[h] != null) continue;
+    let j = h; while (j < n && a[j] == null) j++;
+    if (j < n && a[h - 1] != null && j - h <= 3) for (let k = h; k < j; k++) a[k] = a[h - 1] + (a[j] - a[h - 1]) * (k - h + 1) / (j - h + 1);
+    h = j;
+  }
+  return { times: a.map((_, h) => (st + h) * HOUR), a };
+}
+
 // Builds everything for the main chart that doesn't depend on hover position.
 // `hy` is the highlighted year in By year mode, or null.
 function buildChart(D, S, range, hy) {
   const { t, v, N, key } = D;
   const { p10, p50, p90, firstYear, curYear, byYear } = S;
   if (range !== 'yr') {
-    const all = range === 'all';
+    const all = range === 'all', hourly = range === 'wk';
     let times, a;
     const b = [], lo = [], hi = [], med = [];
-    if (all) {
+    if (hourly) {
+      ({ times, a } = hourlyWeek(D.rows));
+      // Daily figures sit at midday and are interpolated to each hour.
+      if (N > 373) {
+        const at = (T, get) => { const f = (T - t[0]) / DAY - 0.5, i = Math.floor(f), w = f - i; return get(i) * (1 - w) + get(i + 1) * w; };
+        const byK = (arr) => (i) => arr[keyOf(t[0] + i * DAY)];
+        for (const T of times) {
+          b.push(at(T - 365 * DAY, (i) => v[i]));
+          lo.push(at(T, byK(p10))); hi.push(at(T, byK(p90))); med.push(at(T, byK(p50)));
+        }
+      }
+    } else if (all) {
       times = []; a = [];
       for (let i = 0; i + 7 <= N; i += 7) { times.push(t[i]); a.push(mean(v.slice(i, i + 7))); }
       times.push(t[N - 1]); a.push(v[N - 1]);
@@ -358,7 +391,8 @@ function buildChart(D, S, range, hy) {
     const xTicks = [];
     for (let j = 0; j < len; j++) {
       const d = new Date(times[j]); let label = null;
-      if (all) { if (j && new Date(times[j - 1]).getUTCFullYear() !== d.getUTCFullYear() && d.getUTCFullYear() % 5 === 0) label = String(d.getUTCFullYear()); }
+      if (hourly) { if (d.getUTCHours() === 0) label = fs(times[j]); }
+      else if (all) { if (j && new Date(times[j - 1]).getUTCFullYear() !== d.getUTCFullYear() && d.getUTCFullYear() % 5 === 0) label = String(d.getUTCFullYear()); }
       else if (range <= 31) { if ((len - 1 - j) % 7 === 0) label = fs(times[j]); }
       else if (range <= 365) { if (d.getUTCDate() === 1) label = M[d.getUTCMonth()] + (d.getUTCMonth() === 0 ? ' ’' + String(d.getUTCFullYear()).slice(2) : ''); }
       else if (d.getUTCMonth() === 0 && d.getUTCDate() === 1) label = String(d.getUTCFullYear());
@@ -366,10 +400,10 @@ function buildChart(D, S, range, hy) {
       if (label && left > 3 && left < 97) xTicks.push({ label, left: pct(left) });
     }
     const hasPrior = b.length > 0;
-    const legend = [{ label: all ? 'Weekly average' : 'This period', border: BLUE }];
+    const legend = [{ label: all ? 'Weekly average' : hourly ? 'Hourly' : 'This period', border: BLUE }];
     if (hasPrior) legend.push({ label: 'Same days last year', border: ORANGE_D }, { label: 'Median, ' + firstYear + '–' + (curYear - 1), border: INK_D }, { label: 'Middle 80% of years', border: BAND });
     return {
-      len, Y, all, times, a, b, med, hasPrior,
+      len, Y, all, hourly, times, a, b, med, hasPrior,
       paths: { a: pathOf(a, len, Y), b: pathOf(b, len, Y), bDash: '6 4', c: pathOf(med, len, Y), g: '', h: '', band: bandOf(lo, hi, len, Y) },
       yTicks: yTicksOf(dm, Y), xTicks, legend, todayLeft: null
     };
@@ -423,8 +457,8 @@ function renderHover(D, S, C, hov) {
     dotVal = C.a[j];
     items = [{ label: C.all ? 'Week avg' : 'Level', value: ft(C.a[j]), border: BLUE }];
     if (C.hasPrior) items.push({ label: 'Last year', value: ft(C.b[j]), border: ORANGE_D }, { label: 'Median', value: ft(C.med[j]), border: INK_D });
-    if (hov != null) items.push({ label: 'vs. now', value: sg(S.cur - C.a[j]) + ' ft', border: '0 solid transparent' });
-    date = (C.all ? 'Week of ' : '') + fd(C.times[j]);
+    if (hov != null && C.a[j] != null) items.push({ label: 'vs. now', value: sg(S.cur - C.a[j]) + ' ft', border: '0 solid transparent' });
+    date = C.hourly ? fh(C.times[j]) : (C.all ? 'Week of ' : '') + fd(C.times[j]);
   } else {
     const { curYear, byYear } = S;
     j = hov == null ? S.keyT : Math.round(hov * 365);
@@ -634,7 +668,7 @@ function start(D) {
 
   // Range buttons, year stepper + hover
   let range = 365, hy = null, hov = null, C;
-  const RANGES = [[30, '30D'], [90, '90D'], [365, '1Y'], [1826, '5Y'], ['all', 'All'], ['yr', 'By year']];
+  const RANGES = [['wk', '1W'], [30, '30D'], [90, '90D'], [365, '1Y'], [1826, '5Y'], ['all', 'All'], ['yr', 'By year']];
   const draw = () => {
     C = buildChart(D, S, range, hy == null ? null : S.years[hy]);
     renderChart(C);
@@ -647,7 +681,7 @@ function start(D) {
   $('ranges').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     const k = b.dataset.k;
-    range = k === 'yr' || k === 'all' ? k : +k; hov = null; draw();
+    range = k === 'yr' || k === 'all' || k === 'wk' ? k : +k; hov = null; draw();
   });
   // Stepping past either end clears the highlight.
   const step = (dlt) => {
