@@ -486,19 +486,6 @@ function renderYearPicker(S, hy) {
   $('hyNote').textContent = hy + ': low ' + Math.min(...yv).toFixed(2) + ' · high ' + Math.max(...yv).toFixed(2) + ' ft';
 }
 
-const PER = [[1, '24 hours'], [3, '3 days'], [7, '1 week'], [14, '2 weeks'], [30, '30 days'], [90, '90 days'], [365, '1 year']];
-
-function renderChanges(D, S) {
-  const ds = PER.map(([p]) => p === 1 ? S.cur - S.cur24 : S.cur - D.v[S.L - p]);
-  const mx = Math.max(0.05, ...ds.map(Math.abs));
-  $('changes').innerHTML = PER.map(([, label], k) => {
-    const d = ds[k], w = Math.abs(d) / mx * 50;
-    return `<div class="change-row"><span class="lbl">${label}</span><div class="track"><div class="axis"></div>
-      <div class="bar" style="left:${pct(d < 0 ? 50 - w : 50)};width:${pct(w)};background:${d >= 0 ? '#1D5FA6' : '#8A99A2'}"></div></div>
-      <span class="val">${sg(d)}</span></div>`;
-  }).join('');
-}
-
 function renderAhead(D, S) {
   const { t, v, N } = D;
   const { cur, todayMs, p50, firstYear, curYear } = S;
@@ -653,7 +640,6 @@ function start(D) {
   $('updated').textContent = formatUpdated(S.last);
   renderHero(D, S);
   renderTiles(D, S);
-  renderChanges(D, S);
   renderAhead(D, S);
   renderRecords(D, S);
   renderStorms(D, S);
