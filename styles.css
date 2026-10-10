@@ -18,13 +18,11 @@
 body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); min-height: 100vh; }
 a { color: var(--blue); }
 a:hover { color: var(--ink); }
-input[type=range] { accent-color: var(--blue); }
 h1, h2 { margin: 0; }
 h2 { font-size: 24px; font-weight: 700; font-stretch: 85%; }
 
 .mono { font-family: var(--mono); }
 .muted { font-size: 14px; color: var(--muted); line-height: 1.4; }
-.small { font-size: 12px; color: var(--muted); }
 .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 
 .wrap { max-width: 1200px; margin: 0 auto; padding: 32px 24px 56px; display: flex; flex-direction: column; gap: 24px; }
@@ -112,10 +110,6 @@ h1 { font-size: 40px; font-weight: 800; font-stretch: 80%; letter-spacing: -0.01
 
 /* Change + ahead */
 .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 16px; }
-.slider-box { background: var(--bg); border-radius: 4px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.slider-label { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 15px; }
-.slider-delta { font-weight: 600; font-size: 18px; }
-#ndays { width: 100%; min-height: 32px; margin: 0; }
 
 .change-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 76px; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--grid); }
 .change-row .lbl { font-size: 14px; }
