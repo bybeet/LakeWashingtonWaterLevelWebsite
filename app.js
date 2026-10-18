@@ -725,7 +725,8 @@ function renderTempStatic(T, A, u) {
   const labels = (u === 'F' ? [40, 50, 60, 70, 80] : [5, 10, 15, 20, 25]).map((x) =>
     `<text x="50" y="${(ty(toF(x)) + 4).toFixed(1)}" font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600" fill="#A9BAC2" text-anchor="end">${x}</text>`).join('');
   const nowY = ty(now), hiY = ty(f[aHi]), loY = ty(f[aLo]), nowTextY = nowY + 5;
-  const avoid = (y) => (Math.abs(y - nowTextY) < 14 ? (y < nowTextY ? nowTextY - 14 : nowTextY + 14) : y).toFixed(1);
+  // Now always lies between the low and high, so keep high above its label and low below.
+  const hiTextY = Math.min(hiY + 4, nowTextY - 14).toFixed(1), loTextY = Math.max(loY + 4, nowTextY + 14).toFixed(1);
   const mono = 'font-family="IBM Plex Mono, monospace"';
   $('thermo').innerHTML = `
     <rect x="58" y="14" width="28" height="270" rx="14" fill="#F4F1E8"></rect>
@@ -737,8 +738,8 @@ function renderTempStatic(T, A, u) {
     ${labels}
     <path d="M98 ${nowY.toFixed(1)}l9 -6v12z" fill="#EAF0EE"></path>
     <text x="108" y="${nowTextY.toFixed(1)}" ${mono} font-size="14" font-weight="600" fill="#EAF0EE">now ${tf1(u, now)}°</text>
-    <text x="108" y="${avoid(hiY + 4)}" ${mono} font-size="11" fill="#7FD1C9">high ${tf1(u, f[aHi])}°</text>
-    <text x="108" y="${avoid(loY + 4)}" ${mono} font-size="11" fill="#7FD1C9">low ${tf1(u, f[aLo])}°</text>`;
+    <text x="108" y="${hiTextY}" ${mono} font-size="11" fill="#7FD1C9">high ${tf1(u, f[aHi])}°</text>
+    <text x="108" y="${loTextY}" ${mono} font-size="11" fill="#7FD1C9">low ${tf1(u, f[aLo])}°</text>`;
 
   const tiles = [
     { label: 'Since readings began', value: tf1(u, f[aLo]) + '–' + tf1(u, f[aHi]) + '°', sub: 'Low ' + fsh(t[aLo]) + ' · High ' + fsh(t[aHi]) },
