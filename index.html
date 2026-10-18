@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lake Washington water level</title>
-<meta name="description" content="Current Lake Washington / Lake Union water level at the Ballard Locks, with 25 years of history, records and a 12-week outlook.">
+<meta name="description" content="Current Lake Washington / Lake Union water level at the Ballard Locks, with 25 years of history, records and a 12-week outlook, plus hourly water temperature.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
@@ -18,18 +18,25 @@
 <header class="top">
   <div class="stack-6">
     <div class="mono eyebrow">Lake Washington · Lake Union · Ship Canal</div>
-    <h1>Lake level</h1>
+    <h1 id="title">Lake level</h1>
   </div>
   <div class="mono top-meta">
-    <span>Measured at the Ballard Locks</span>
+    <span id="where">Measured at the Ballard Locks</span>
+    <span class="meta-sep" aria-hidden="true">·</span>
     <span id="updated">Loading…</span>
   </div>
 </header>
 
+<nav class="tabs" role="tablist" aria-label="Lake data" id="tabs" hidden>
+  <button type="button" role="tab" id="tabLevel" data-tab="level" aria-controls="levelPanel" aria-selected="true">Level<span class="tab-v" id="tabLevelV"></span></button>
+  <button type="button" role="tab" id="tabTemp" data-tab="temp" aria-controls="tempPanel" aria-selected="false">Water temp<span class="tab-v" id="tabTempV"></span></button>
+</nav>
+
 <div id="loading" class="mono loading">Loading readings since 2001…</div>
 <div id="error" class="error" hidden></div>
 
-<main id="app" class="stack-24" hidden>
+<main id="app" hidden>
+<div id="levelPanel" class="stack-24" role="tabpanel" aria-labelledby="tabLevel">
 
 <!-- Hero -->
 <section class="hero">
@@ -154,11 +161,114 @@
   <div class="storms" id="drops"></div>
 </section>
 
+</div>
+
+<div id="tempPanel" class="stack-24" role="tabpanel" aria-labelledby="tabTemp" hidden>
+
+<div id="tempEmpty" class="card muted" hidden>No water temperature readings yet. They’ll show up here after the next hourly update.</div>
+
+<div id="tempBody" class="stack-24">
+
+<!-- Hero -->
+<section class="hero">
+  <div class="stack-20">
+    <div class="hero-top">
+      <div class="row-12">
+        <span class="mono eyebrow hero-eyebrow">Water temp now</span>
+        <span class="mono phase phase-temp" id="tDayPill"></span>
+      </div>
+      <div class="units" role="group" aria-label="Units" id="units">
+        <button type="button" data-u="F" aria-pressed="true">°F</button>
+        <button type="button" data-u="C" aria-pressed="false">°C</button>
+      </div>
+    </div>
+    <div class="hero-num">
+      <span class="big" id="tCur"></span>
+      <span class="unit" id="tUnit"></span>
+    </div>
+    <div class="mono hero-deltas">
+      <div><span>24 hours</span><strong id="tD24"></strong></div>
+      <div><span>Today’s low</span><strong id="tLo"></strong></div>
+      <div><span>Today’s high</span><strong id="tHi"></strong></div>
+    </div>
+    <p class="hero-line" id="tHeroLine"></p>
+  </div>
+  <div class="gauge-wrap">
+    <svg id="thermo" viewBox="0 0 200 330" width="240" height="396" role="img" aria-label="Thermometer showing the current water temperature and the range since readings began"></svg>
+  </div>
+</section>
+
+<!-- Stat tiles -->
+<section class="tiles" id="tTiles"></section>
+
+<!-- Chart -->
+<section class="card stack-16">
+  <div class="card-head">
+    <h2>Temperature over time</h2>
+    <div class="ranges" role="group" aria-label="Time range" id="tRanges"></div>
+  </div>
+
+  <div class="readout-row">
+    <div class="mono readout" id="tReadout"></div>
+  </div>
+
+  <div class="chart-grid temp-grid">
+    <div class="ylabels" id="tempY"></div>
+    <div class="plot" id="tPlot">
+      <div id="tempNights"></div>
+      <div id="tempGrid"></div>
+      <svg viewBox="0 0 1000 300" preserveAspectRatio="none" class="plot-svg" aria-hidden="true">
+        <path id="tBand" fill="#0E7470" opacity="0.12"></path>
+        <path id="tLine" fill="none" stroke="#0E7470" stroke-width="2.25" stroke-linejoin="round" vector-effect="non-scaling-stroke"></path>
+      </svg>
+      <div class="hover-line" id="tHoverLine"></div>
+      <div class="hover-dot hover-dot-temp" id="tHoverDot"></div>
+    </div>
+    <div></div>
+    <div class="xlabels" id="tempX"></div>
+  </div>
+
+  <div class="legend" id="tLegend"></div>
+</section>
+
+<section class="pair">
+
+<!-- Day by day -->
+<div class="card stack-14">
+  <h2>Day by day</h2>
+  <div class="table-scroll">
+    <table class="days">
+      <thead>
+        <tr><th scope="col">Day</th><th scope="col">Low</th><th scope="col">High</th><th scope="col">Average</th><th scope="col">vs. day before</th></tr>
+      </thead>
+      <tbody id="tDays"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- As the record grows -->
+<div class="card stack-18">
+  <div class="stack-4">
+    <h2>As the record grows</h2>
+    <span class="muted">There’s no history yet, so this tab shows what’s been collected so far. These views switch on as readings accumulate.</span>
+  </div>
+  <div class="stack-8">
+    <div class="mono progress-label"><span id="tDaysCollected"></span><span class="muted">1 year</span></div>
+    <div class="progress"><div id="tYearBar"></div></div>
+  </div>
+  <div id="tUnlocks"></div>
+</div>
+
+</section>
+
+</div>
+</div>
 </main>
 
 <footer class="foot">
-  <span class="foot-text">Lake elevation in feet from U.S. Army Corps of Engineers hourly readings at the Lake Washington Ship Canal, in Corps project datum (22 ft = 18.75 ft NAVD88), averaged to daily values (Pacific time).</span>
-  <span class="mono"><a href="https://water.sec.usace.army.mil/overview/nws/locations/lwsc" rel="noopener">USACE Water Data · Lake Washington Ship Canal</a></span>
+  <span class="foot-text" id="footTemp" hidden>Water temperature measured on the east side of Lake Union, about 40 feet off shore, at a depth of 5 feet.</span>
+  <span class="foot-text" id="footLevel">Lake elevation in feet from U.S. Army Corps of Engineers hourly readings at the Lake Washington Ship Canal, in Corps project datum (22 ft = 18.75 ft NAVD88), averaged to daily values (Pacific time).</span>
+  <span class="mono" id="footLevelLink"><a href="https://water.sec.usace.army.mil/overview/nws/locations/lwsc" rel="noopener">USACE Water Data · Lake Washington Ship Canal</a></span>
 </footer>
 
 </div>

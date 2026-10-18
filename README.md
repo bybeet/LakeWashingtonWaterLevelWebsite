@@ -1,6 +1,6 @@
 # Lake Washington Water Level website
 
-A static page (`index.html`, `app.js`, `styles.css`) that charts Lake Washington's water level. It loads `data.csv` from next to `index.html`, which the [scraper](https://github.com/bybeet/lake-washington-water-level) writes to the same S3 bucket.
+A static page (`index.html`, `app.js`, `styles.css`) that charts Lake Washington's water level and, on a second tab, water temperature. It loads `data.csv` from next to `index.html`, which the [scraper](https://github.com/bybeet/lake-washington-water-level) writes to the same S3 bucket.
 
 The site is served at https://lake.brewops.dev by CloudFront from the private bucket `lake-washington-water-level-823580404672` (us-west-2).
 

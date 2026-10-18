@@ -1,9 +1,9 @@
 'use strict';
 
-// Readings file: headerless CSV of `timestamp,level_ft`, one row per hour. ISO
-// 8601 timestamps with Z or an offset are converted to Pacific time; timestamps
-// without one are taken as Pacific wall time already. Header and # comment rows
-// are skipped.
+// Readings file: headerless CSV of `timestamp,level_ft[,water_temp]`, one row
+// per hour. Either value may be blank. ISO 8601 timestamps with Z or an offset
+// are converted to Pacific time; timestamps without one are taken as Pacific
+// wall time already. Header and # comment rows are skipped.
 const DATA_URL = 'data.csv';
 
 // Corps project datum. The winter hold is 20 ft (USACE Seattle District release
@@ -30,12 +30,20 @@ const MIN_PLAUSIBLE_FT = 19.5;
 // spike (two on Dec 30, 2002) and is replaced with that median.
 const SPIKE_FT = 0.25;
 
+// Unit of the water temperature column. Temperatures are kept in °F and
+// converted for display.
+const TEMP_SOURCE_UNIT = 'F';
+// Temperatures outside this range (°F) are sensor glitches and are dropped.
+const TEMP_MIN_F = 32;
+const TEMP_MAX_F = 90;
+
 const DAY = 86400000;
 const HOUR = 3600000;
 const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const H = 300;
 const BLUE = '2.5px solid #1D5FA6', ORANGE_D = '2px dashed #B05410', ORANGE = '2px solid #B05410', INK = '2px solid #10222F',
   GREY = '1px solid #B4C0C6', INK_D = '2px dotted #10222F', BAND = '8px solid rgba(29,95,166,0.18)';
+const TEAL = '#0E7470';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -80,14 +88,15 @@ function pacificOffset(utc) {
 const TS_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?\s*(Z|[+-]\d{2}:?\d{2})?)?$/;
 
 function parseReadings(text) {
-  const rows = [];
+  const rows = [], temps = [];
   for (const line of text.split(/\r?\n/)) {
-    const comma = line.indexOf(',');
-    if (comma < 0) continue;
-    const ts = line.slice(0, comma).trim();
-    const val = parseFloat(line.slice(comma + 1));
-    const m = TS_RE.exec(ts);
-    if (!m || !Number.isFinite(val) || val < MIN_PLAUSIBLE_FT) continue;
+    const cols = line.split(',');
+    if (cols.length < 2) continue;
+    const m = TS_RE.exec(cols[0].trim());
+    if (!m) continue;
+    const val = parseFloat(cols[1]);
+    let temp = parseFloat(cols[2]);
+    if (TEMP_SOURCE_UNIT === 'C') temp = temp * 9 / 5 + 32;
     // `at` is Pacific wall-clock time encoded as a UTC epoch, so all later
     // date math and formatting can use getUTC* without shifting it.
     let at = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] || 0, +m[5] || 0, +m[6] || 0);
@@ -96,7 +105,8 @@ function parseReadings(text) {
       const utc = at - z * 60000;
       at = utc + pacificOffset(utc);
     }
-    rows.push({ at, val, hasTime: m[4] != null });
+    if (Number.isFinite(val) && val >= MIN_PLAUSIBLE_FT) rows.push({ at, val, hasTime: m[4] != null });
+    if (temp >= TEMP_MIN_F && temp <= TEMP_MAX_F) temps.push({ at, val: temp, hasTime: m[4] != null });
   }
   if (!rows.length) throw new Error('No readings found in ' + DATA_URL);
   rows.sort((a, b) => a.at - b.at);
@@ -135,7 +145,19 @@ function parseReadings(text) {
     for (let k = i; k < j; k++) v[k] = v[i - 1] + (v[j] - v[i - 1]) * (k - i + 1) / (j - i + 1);
     i = j;
   }
-  return { t, v, yr, key, N, rows };
+  return { t, v, yr, key, N, rows, temp: hourlyTemps(temps) };
+}
+
+// Water temperatures averaged to one reading per hour, rounded to 0.1 °F.
+// Unlike levels, gaps are left as they are.
+function hourlyTemps(temps) {
+  temps.sort((a, b) => a.at - b.at);
+  const t = [], f = [], n = [];
+  for (const r of temps) {
+    const h = Math.floor(r.at / HOUR) * HOUR, L = t.length - 1;
+    if (L >= 0 && t[L] === h) { f[L] += r.val; n[L]++; } else { t.push(h); f.push(r.val); n.push(1); }
+  }
+  return { t, f: f.map((x, i) => Math.round(x / n[i] * 10) / 10), last: temps[temps.length - 1] };
 }
 
 // Everything derived from the whole archive that more than one section uses.
@@ -625,6 +647,222 @@ function renderStorms(D, S) {
   renderMoves(D, 'drops', -1);
 }
 
+// ---------- water temperature ----------
+
+const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const hrLabel = (h) => (h % 12 || 12) + ' ' + (h < 12 ? 'AM' : 'PM');
+const fsh = (ti) => fs(ti) + ', ' + hrLabel(new Date(ti).getUTCHours());
+// Temperature and temperature-difference formatters for unit 'F' or 'C'.
+const tcv = (u, x) => (u === 'F' ? x : (x - 32) * 5 / 9);
+const tcd = (u, d) => (u === 'F' ? d : d * 5 / 9);
+const tf1 = (u, x) => tcv(u, x).toFixed(1);
+const tsg = (u, d) => { const x = tcd(u, d); return (x >= 0.05 ? '+' : x <= -0.05 ? '−' : '±') + Math.abs(x).toFixed(1); };
+// Index of the reading nearest to time T.
+function nearestAt(t, T) {
+  let lo = 0, hi = t.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (t[mid] <= T) lo = mid; else hi = mid; }
+  return Math.abs(t[hi] - T) < Math.abs(t[lo] - T) ? hi : lo;
+}
+
+// Everything about the temperature record that doesn't depend on the unit.
+function analyzeTemp(T) {
+  const { t, f } = T, n = f.length, L = n - 1, now = f[L];
+  const days = [];
+  for (let i = 0; i < n; i++) {
+    const ms = Math.floor(t[i] / DAY) * DAY;
+    if (!days.length || days[days.length - 1].ms !== ms) days.push({ ms, vals: [], first: i });
+    days[days.length - 1].vals.push(f[i]);
+  }
+  days.forEach((d) => { d.lo = Math.min(...d.vals); d.hi = Math.max(...d.vals); d.avg = mean(d.vals); d.full = d.vals.length >= 23; });
+  const dayOf = [];
+  days.forEach((d) => d.vals.forEach(() => dayOf.push(d)));
+  let aLo = 0, aHi = 0;
+  f.forEach((x, i) => { if (x < f[aLo]) aLo = i; if (x > f[aHi]) aHi = i; });
+
+  // Trend: the last 24 hours' average vs. the 24 hours ending up to 7 days earlier.
+  const span = t[L] - t[0];
+  const back = Math.min(7 * DAY, Math.floor((span - DAY) / DAY) * DAY);
+  const avgIn = (a, b) => { const xs = f.filter((_, i) => t[i] > a && t[i] <= b); return xs.length ? mean(xs) : null; };
+  const recent = avgIn(t[L] - DAY, t[L]), earlier = back >= DAY ? avgIn(t[L] - back - DAY, t[L] - back) : null;
+  const trend = earlier == null ? null : recent - earlier, trendDays = back / DAY;
+  const i24 = nearestAt(t, t[L] - DAY);
+  const d24 = Math.abs(t[i24] - (t[L] - DAY)) <= HOUR ? now - f[i24] : null;
+
+  // Daily swing and the warmest and coolest hours, from complete days only.
+  const fullDays = days.filter((d) => d.full);
+  const swing = fullDays.length ? mean(fullDays.map((d) => d.hi - d.lo)) : null;
+  const byHr = Array.from({ length: 24 }, () => []);
+  for (let i = 0; i < n; i++) if (dayOf[i].full) byHr[new Date(t[i]).getUTCHours()].push(f[i] - dayOf[i].avg);
+  const hrMeans = byHr.map((a) => (a.length ? mean(a) : 0));
+  const warmH = hrMeans.indexOf(Math.max(...hrMeans)), coolH = hrMeans.indexOf(Math.min(...hrMeans));
+  return { L, now, days, dayOf, aLo, aHi, span, trend, trendDays, d24, swing, warmH, coolH, today: days[days.length - 1] };
+}
+
+function renderTempStatic(T, A, u) {
+  const { t, f } = T;
+  const { now, days, today, aLo, aHi, trend, trendDays, swing, warmH, coolH } = A;
+  $('tDayPill').textContent = 'Day ' + days.length + ' of readings';
+  $('tCur').textContent = tf1(u, now);
+  $('tUnit').textContent = '°' + u;
+  $('tD24').textContent = A.d24 == null ? '—' : tsg(u, A.d24) + '°';
+  $('tLo').textContent = tf1(u, today.lo) + '°';
+  $('tHi').textContent = tf1(u, today.hi) + '°';
+  $('units').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.u === u)));
+
+  const past = 'over the past ' + trendDays + ' day' + (trendDays === 1 ? '' : 's');
+  let line = trend == null ? 'Readings began ' + fsh(t[0]) + '.'
+    : Math.abs(trend) > 0.1 ? (trend < 0 ? 'Cooling' : 'Warming') + ' about ' + Math.abs(tcd(u, trend)).toFixed(1) + '° ' + past + '.'
+    : 'Holding steady ' + past + '.';
+  if (swing != null) line += ' The water swings about ' + tcd(u, swing).toFixed(1) + '° a day, warmest around ' + hrLabel(warmH) + '.';
+  $('tHeroLine').textContent = line;
+
+  // Thermometer: 40–80 °F over the 250px tube.
+  const ty = (F) => 270 - (Math.min(80, Math.max(40, F)) - 40) / 40 * 250;
+  const toF = (x) => (u === 'F' ? x : x * 9 / 5 + 32);
+  let ticks = '';
+  if (u === 'F') for (let F = 40; F <= 80; F += 2) ticks += 'M' + (F % 10 ? 54 : 52) + ' ' + ty(F).toFixed(1) + 'H58';
+  else for (let c = 5; c <= 26; c++) ticks += 'M' + (c % 5 ? 54 : 52) + ' ' + ty(toF(c)).toFixed(1) + 'H58';
+  const labels = (u === 'F' ? [40, 50, 60, 70, 80] : [5, 10, 15, 20, 25]).map((x) =>
+    `<text x="50" y="${(ty(toF(x)) + 4).toFixed(1)}" font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600" fill="#A9BAC2" text-anchor="end">${x}</text>`).join('');
+  const nowY = ty(now), hiY = ty(f[aHi]), loY = ty(f[aLo]), nowTextY = nowY + 5;
+  const avoid = (y) => (Math.abs(y - nowTextY) < 14 ? (y < nowTextY ? nowTextY - 14 : nowTextY + 14) : y).toFixed(1);
+  const mono = 'font-family="IBM Plex Mono, monospace"';
+  $('thermo').innerHTML = `
+    <rect x="58" y="14" width="28" height="270" rx="14" fill="#F4F1E8"></rect>
+    <circle cx="72" cy="294" r="26" fill="#F4F1E8"></circle>
+    <path d="${ticks}" stroke="#10222F" stroke-width="1.5" fill="none"></path>
+    <path d="M92 ${hiY.toFixed(1)}V${loY.toFixed(1)}" stroke="#7FD1C9" stroke-width="10" stroke-linecap="round" fill="none" opacity="0.5"></path>
+    <rect x="64" y="${nowY.toFixed(1)}" width="16" height="${(294 - nowY).toFixed(1)}" fill="#0E7470"></rect>
+    <circle cx="72" cy="294" r="19" fill="#0E7470"></circle>
+    ${labels}
+    <path d="M98 ${nowY.toFixed(1)}l9 -6v12z" fill="#EAF0EE"></path>
+    <text x="108" y="${nowTextY.toFixed(1)}" ${mono} font-size="14" font-weight="600" fill="#EAF0EE">now ${tf1(u, now)}°</text>
+    <text x="108" y="${avoid(hiY + 4)}" ${mono} font-size="11" fill="#7FD1C9">high ${tf1(u, f[aHi])}°</text>
+    <text x="108" y="${avoid(loY + 4)}" ${mono} font-size="11" fill="#7FD1C9">low ${tf1(u, f[aLo])}°</text>`;
+
+  const tiles = [
+    { label: 'Since readings began', value: tf1(u, f[aLo]) + '–' + tf1(u, f[aHi]) + '°', sub: 'Low ' + fsh(t[aLo]) + ' · High ' + fsh(t[aHi]) },
+    trend != null && { label: 'Past ' + trendDays + ' day' + (trendDays === 1 ? '' : 's'), value: tsg(u, trend) + '°', sub: 'Last 24 hours’ average vs. ' + trendDays + ' day' + (trendDays === 1 ? '' : 's') + ' earlier' },
+    { label: 'Typical daily swing', value: swing == null ? '—' : tcd(u, swing).toFixed(1) + '°', sub: swing == null ? 'After the first full day of readings' : 'Warmest around ' + hrLabel(warmH) + ', coolest around ' + hrLabel(coolH) }
+  ].filter(Boolean);
+  $('tTiles').innerHTML = tiles.map((tl) => `<div class="tile">
+    <span class="mono eyebrow">${esc(tl.label)}</span>
+    <span class="tile-value">${esc(tl.value)}</span>
+    <span class="tile-sub">${esc(tl.sub)}</span></div>`).join('');
+
+  // Day by day, newest first, last 14 days.
+  const rows = days.map((d, k) => {
+    const last = k === days.length - 1;
+    const label = (last ? 'Today' : WD[new Date(d.ms).getUTCDay()] + ', ' + fs(d.ms)) +
+      (d.full ? '' : last ? ' (so far)' : ' (from ' + hrLabel(new Date(t[d.first]).getUTCHours()) + ')');
+    const delta = k ? tsg(u, d.avg - days[k - 1].avg) + '°' : '—';
+    return `<tr><td>${esc(label)}</td><td>${tf1(u, d.lo)}</td><td>${tf1(u, d.hi)}</td><td>${tf1(u, d.avg)}</td><td>${delta}</td></tr>`;
+  }).reverse().slice(0, 14);
+  $('tDays').innerHTML = rows.join('');
+
+  // As the record grows
+  const nDays = days.length;
+  $('tDaysCollected').textContent = nDays + ' day' + (nDays === 1 ? '' : 's') + ' collected';
+  $('tYearBar').style.width = pct(Math.min(100, nDays / 365 * 100));
+  const unlocks = [
+    [30, 'Monthly trend', 'Weekly averages and the month’s warmest and coolest days'],
+    [182, 'Seasonal curve', 'When the lake warms in spring and cools in fall'],
+    [365, 'Compared with last year', 'Today vs. the same date a year ago'],
+    [730, 'Typical for this date', 'A normal range band, like the level tab’s']
+  ];
+  $('tUnlocks').innerHTML = unlocks.map(([dd, title, sub]) => {
+    const done = nDays >= dd, when = done ? 'Ready' : 'TBD';
+    return `<div class="unlock${done ? ' ready' : ''}"><span class="unlock-when">${esc(when)}</span>
+      <span class="ms-body"><span class="unlock-title">${esc(title)}</span><span class="ms-sub">${esc(sub)}</span></span></div>`;
+  }).join('');
+}
+
+const TEMP_RANGES = [['24h', '24H', DAY], ['7d', '7D', 7 * DAY], ['all', 'All', 0]];
+// Ranges longer than the record so far are left out.
+const tempRanges = (A) => TEMP_RANGES.filter(([, , span]) => span === 0 || A.span > span + HOUR);
+
+// Builds the temperature chart for a range key and unit. X is by time, so
+// gaps of more than 3 hours break the line.
+function buildTempChart(T, A, range, u) {
+  const { t, f } = T;
+  const span = (TEMP_RANGES.find(([k]) => k === range) || [])[2] || 0;
+  let st = 0;
+  if (span) while (t[st] < t[A.L] - span) st++;
+  const t0 = t[st], t1 = t[A.L], W = Math.max(HOUR, t1 - t0);
+  const X = (ms) => (ms - t0) / W * 1000;
+  const idx = [];
+  for (let i = st; i <= A.L; i++) idx.push(i);
+  const showBand = range !== '24h';
+  const vals = idx.map((i) => tcv(u, f[i]));
+  if (showBand) idx.forEach((i) => vals.push(tcv(u, A.dayOf[i].lo), tcv(u, A.dayOf[i].hi)));
+  let lo = Math.min(...vals) - 0.2, hi = Math.max(...vals) + 0.2;
+  const step = hi - lo < 2 ? 0.5 : hi - lo < 5 ? 1 : 2;
+  lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+  const Y = mkY(lo, hi);
+
+  // Runs of readings no more than 3 hours apart.
+  const runs = [];
+  idx.forEach((i, k) => { if (!k || t[i] - t[idx[k - 1]] > 3 * HOUR) runs.push([]); runs[runs.length - 1].push(i); });
+  const pt = (i, x) => X(t[i]).toFixed(1) + ' ' + Y(tcv(u, x)).toFixed(1);
+  let line = '', band = '';
+  for (const run of runs) {
+    line += run.map((i, k) => (k ? 'L' : 'M') + pt(i, f[i])).join('');
+    if (showBand && run.length > 1) {
+      band += run.map((i, k) => (k ? 'L' : 'M') + pt(i, A.dayOf[i].hi)).join('');
+      for (let k = run.length - 1; k >= 0; k--) band += 'L' + pt(run[k], A.dayOf[run[k]].lo);
+      band += 'Z';
+    }
+  }
+
+  const yTicks = [];
+  for (let x = lo; x <= hi + 1e-9; x += step) yTicks.push({ label: x.toFixed(step < 1 ? 1 : 0) + '°', top: pct(Y(x) / H * 100) });
+  // Hour ticks every 6 hours on 24H; otherwise midnights, thinned to about 8.
+  const xTicks = [], dayStep = Math.max(1, Math.ceil(W / DAY / 8));
+  for (let ms = Math.ceil(t0 / HOUR) * HOUR; ms <= t1; ms += HOUR) {
+    const h = new Date(ms).getUTCHours(), left = X(ms) / 10;
+    let label = null;
+    if (range === '24h') { if (h % 6 === 0) label = hrLabel(h); } else if (h === 0 && Math.round(ms / DAY) % dayStep === 0) label = fs(ms);
+    if (label && left > 3 && left < 97) xTicks.push({ label, left: pct(left) });
+  }
+  // Night shading, 8 PM – 7 AM, while it's still readable.
+  const nights = [];
+  if (W <= 14 * DAY) {
+    for (let d = Math.floor(t0 / DAY) * DAY - DAY; d <= t1; d += DAY) {
+      const a = Math.max(t0, d + 20 * HOUR), b = Math.min(t1, d + 31 * HOUR);
+      if (b > a) nights.push({ left: pct(X(a) / 10), width: pct((X(b) - X(a)) / 10) });
+    }
+  }
+  const legend = [`<span><i style="border-top:2.25px solid ${TEAL}"></i>Hourly reading</span>`];
+  if (showBand) legend.push('<span><i style="border-top:8px solid rgba(14,116,112,0.18)"></i>Each day’s low to high</span>');
+  if (nights.length) legend.push('<span><i class="night-sw"></i>Night (8 PM – 7 AM)</span>');
+  return { idx, t0, W, X, Y, line, band, yTicks, xTicks, nights, legend };
+}
+
+function renderTempChart(TC) {
+  $('tLine').setAttribute('d', TC.line);
+  $('tBand').setAttribute('d', TC.band);
+  $('tempY').innerHTML = yLabelsHtml(TC.yTicks);
+  $('tempGrid').innerHTML = gridHtml(TC.yTicks);
+  $('tempX').innerHTML = xLabelsHtml(TC.xTicks);
+  $('tempNights').innerHTML = TC.nights.map((n) => `<div class="night" style="left:${n.left};width:${n.width}"></div>`).join('');
+  $('tLegend').innerHTML = TC.legend.join('');
+}
+
+function renderTempHover(T, A, TC, u, hov) {
+  const { t, f } = T;
+  const i = hov == null ? A.L : nearestAt(t, TC.t0 + hov * TC.W);
+  const d = A.dayOf[i];
+  const items = [{ label: 'Water', value: tf1(u, f[i]) + '°' + u }, { label: 'That day', value: tf1(u, d.lo) + '–' + tf1(u, d.hi) + '°' }];
+  $('tReadout').innerHTML = `<span class="date">${esc(fh(t[i]))}</span>` + items.map((ri) =>
+    `<span class="item"><span class="k">${esc(ri.label)}</span><span class="v">${esc(ri.value)}</span></span>`).join('');
+  const left = pct(TC.X(t[i]) / 10);
+  const line = $('tHoverLine'), dot = $('tHoverDot');
+  line.style.left = left;
+  line.classList.toggle('on', hov != null);
+  dot.style.left = left;
+  dot.style.top = pct(TC.Y(tcv(u, f[i])) / H * 100);
+}
+
 // ---------- boot ----------
 
 function formatUpdated(last) {
@@ -679,8 +917,78 @@ function start(D) {
   plot.addEventListener('pointerleave', () => { hov = null; renderHover(D, S, C, hov); });
   draw();
 
+  const temp = startTemp(D.temp);
+  $('tabLevelV').textContent = S.cur.toFixed(2) + ' ft';
+
+  // Tabs. The level tab is the default; #temp opens the temperature tab.
+  const showTab = (tab) => {
+    const isTemp = tab === 'temp';
+    $('tabLevel').setAttribute('aria-selected', String(!isTemp));
+    $('tabTemp').setAttribute('aria-selected', String(isTemp));
+    $('levelPanel').hidden = isTemp;
+    $('tempPanel').hidden = !isTemp;
+    $('title').textContent = isTemp ? 'Water temperature' : 'Lake level';
+    $('updated').textContent = isTemp ? temp.updated : formatUpdated(S.last);
+    $('where').textContent = isTemp ? 'Measured in Lake Union' : 'Measured at the Ballard Locks';
+    $('footLevel').hidden = isTemp;
+    $('footLevelLink').hidden = isTemp;
+    $('footTemp').hidden = !isTemp;
+  };
+  $('tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const tab = b.dataset.tab;
+    history.replaceState(null, '', tab === 'temp' ? '#temp' : location.pathname + location.search);
+    showTab(tab);
+  });
+  window.addEventListener('hashchange', () => showTab(location.hash === '#temp' ? 'temp' : 'level'));
+  showTab(location.hash === '#temp' ? 'temp' : 'level');
+
   $('loading').hidden = true;
+  $('tabs').hidden = false;
   $('app').hidden = false;
+}
+
+// Sets up the temperature tab and returns its header text.
+function startTemp(T) {
+  if (!T.f.length) {
+    $('tabTempV').textContent = '—';
+    $('tempEmpty').hidden = false;
+    $('tempBody').hidden = true;
+    return { updated: 'No readings yet' };
+  }
+  const A = analyzeTemp(T);
+  // The chosen unit is remembered per browser.
+  let unit = 'F';
+  try { if (localStorage.getItem('tempUnit') === 'C') unit = 'C'; } catch (e) { /* storage blocked */ }
+  let range = tempRanges(A).some(([k]) => k === '7d') ? '7d' : 'all', hov = null, TC;
+  const draw = () => {
+    renderTempStatic(T, A, unit);
+    TC = buildTempChart(T, A, range, unit);
+    renderTempChart(TC);
+    renderTempHover(T, A, TC, unit, hov);
+    $('tRanges').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === range)));
+    $('tabTempV').textContent = tf1(unit, A.now) + '°' + unit;
+  };
+  $('tRanges').innerHTML = tempRanges(A).map(([k, label]) => `<button type="button" data-k="${k}" aria-pressed="false">${label}</button>`).join('');
+  $('tRanges').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    range = b.dataset.k; hov = null; draw();
+  });
+  $('units').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    unit = b.dataset.u;
+    try { localStorage.setItem('tempUnit', unit); } catch (err) { /* storage blocked */ }
+    draw();
+  });
+  const plot = $('tPlot');
+  plot.addEventListener('pointermove', (e) => {
+    const r = plot.getBoundingClientRect();
+    hov = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    renderTempHover(T, A, TC, unit, hov);
+  });
+  plot.addEventListener('pointerleave', () => { hov = null; renderTempHover(T, A, TC, unit, hov); });
+  draw();
+  return { updated: formatUpdated(T.last) };
 }
 
 fetch(DATA_URL, { cache: 'no-cache' })
