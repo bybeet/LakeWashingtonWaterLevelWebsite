@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Upload the site files to the S3 bucket that also holds the live data.csv.
+# Upload the site files to the S3 bucket that also holds the live readings.
 #
 #   ./deploy.sh            upload index.html, app.js, styles.css, favicon.svg
 #   ./deploy.sh --dry-run  show what would be uploaded
 #
-# Only the files in SITE_FILES are ever uploaded. data.csv in the bucket is
+# Only the files in SITE_FILES are ever uploaded. data/ in the bucket is
 # written by the scraper and is never touched here.
 set -euo pipefail
 
@@ -30,9 +30,9 @@ if ! aws sts get-caller-identity --region "$REGION" >/dev/null 2>&1; then
   exit 1
 fi
 
-# The page loads data.csv from next to index.html, so warn if it isn't there.
-if ! aws s3api head-object --bucket "$BUCKET" --key data.csv --region "$REGION" >/dev/null 2>&1; then
-  echo "warning: s3://$BUCKET/data.csv not found; the page will show a load error until it exists." >&2
+# The page loads data/index.json from next to index.html, so warn if it isn't there.
+if ! aws s3api head-object --bucket "$BUCKET" --key data/index.json --region "$REGION" >/dev/null 2>&1; then
+  echo "warning: s3://$BUCKET/data/index.json not found; the page will show a load error until it exists." >&2
 fi
 
 content_type() {

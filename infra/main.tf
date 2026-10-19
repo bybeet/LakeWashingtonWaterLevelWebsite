@@ -5,8 +5,9 @@ data "aws_s3_bucket" "site" {
 }
 
 locals {
-  # The only objects CloudFront may read. backup/ and data.json stay private.
-  public_objects = ["index.html", "app.js", "styles.css", "favicon.svg", "data.csv"]
+  # The only objects CloudFront may read: the site files and the per-year
+  # readings under data/. backup/ and the legacy data.csv and data.json stay private.
+  public_objects = ["index.html", "app.js", "styles.css", "favicon.svg", "data/*"]
 }
 
 # ── Certificate ──────────────────────────────────────────────────────────────
@@ -162,7 +163,7 @@ resource "aws_cloudfront_distribution" "site" {
   }
 }
 
-# ── Bucket policy: CloudFront may read only the site files and data.csv ──────
+# ── Bucket policy: CloudFront may read only the site files and data/ ────────
 
 resource "aws_s3_bucket_policy" "site" {
   bucket = data.aws_s3_bucket.site.id

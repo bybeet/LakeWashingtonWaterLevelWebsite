@@ -1,6 +1,6 @@
 # Lake Washington Water Level website
 
-A static page (`index.html`, `app.js`, `styles.css`) that charts Lake Washington's water level and, on a second tab, water temperature. It loads `data.csv` from next to `index.html`, which the [scraper](https://github.com/bybeet/lake-washington-water-level) writes to the same S3 bucket.
+A static page (`index.html`, `app.js`, `styles.css`) that charts Lake Washington's water level and, on a second tab, water temperature. It loads `data/index.json` from next to `index.html`, then every year's CSV it lists (`data/2001.csv` …), all of which the [scraper](https://github.com/bybeet/lake-washington-water-level) writes to the same S3 bucket. The year files are stored brotli-compressed, and the browser decompresses them. Past years are cached as immutable, so a returning visitor only downloads the index and the current year.
 
 The site is served at https://lake.brewops.dev by CloudFront from the private bucket `lake-washington-water-level-823580404672` (us-west-2).
 
@@ -11,7 +11,7 @@ Terraform in `infra/` manages:
 - an ACM certificate for `lake.brewops.dev` (us-east-1), with DNS validation
 - a WAF web ACL (us-east-1): a 500 requests / 5 min per-IP rate limit, plus the AWS IP reputation and common rule sets
 - the CloudFront distribution and its origin access control
-- the bucket policy, which lets only this distribution read `index.html`, `app.js`, `styles.css` and `data.csv`. Everything else in the bucket (`data.json`, `backup/`) stays private.
+- the bucket policy, which lets only this distribution read `index.html`, `app.js`, `styles.css`, `favicon.svg` and `data/*`. Everything else in the bucket (`backup/`, and the legacy `data.csv` and `data.json`) stays private.
 
 The bucket itself belongs to the scraper's Terraform and is only read here with a data source. DNS for `brewops.dev` (Cloudflare) is managed outside Terraform.
 
@@ -62,14 +62,16 @@ The Free plan does not allow `forwarded_values`, custom cache policies, OAI or r
 ./deploy.sh --dry-run  # show what would be uploaded
 ```
 
-The files are uploaded with `Cache-Control: no-cache`, so a deploy shows up on the next page load. `deploy.sh` never touches `data.csv`.
+The files are uploaded with `Cache-Control: no-cache`, so a deploy shows up on the next page load. `deploy.sh` never touches `data/`.
 
 ## Checks
 
 ```bash
 curl -sI https://lake.brewops.dev/                                       # 200, content-type: text/html
 curl -sI http://lake.brewops.dev/                                        # 301 to https
-curl -sI -H 'Accept-Encoding: br' https://lake.brewops.dev/data.csv      # 200, content-encoding: br, text/csv, max-age=3600
+curl -sI https://lake.brewops.dev/data/index.json                        # 200, application/json, max-age=900
+curl -sI https://lake.brewops.dev/data/2025.csv                          # 200, content-encoding: br, max-age=31536000, immutable
+curl -sI https://lake.brewops.dev/data.csv                               # 403
 curl -sI https://lake.brewops.dev/data.json                              # 403
 curl -sI https://lake.brewops.dev/backup/                                # 403
 curl -sI https://lake-washington-water-level-823580404672.s3.us-west-2.amazonaws.com/data.csv  # 403

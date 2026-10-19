@@ -1,10 +1,11 @@
 'use strict';
 
-// Readings file: headerless CSV of `timestamp,level_ft[,water_temp]`, one row
-// per hour. Either value may be blank. ISO 8601 timestamps with Z or an offset
-// are converted to Pacific time; timestamps without one are taken as Pacific
-// wall time already. Header and # comment rows are skipped.
-const DATA_URL = 'data.csv';
+// Readings: headerless CSV of `timestamp,level_ft[,water_temp]`, one row per
+// hour, split into one file per UTC year that data/index.json lists. Either
+// value may be blank. ISO 8601 timestamps with Z or an offset are converted to
+// Pacific time; timestamps without one are taken as Pacific wall time already.
+// Header and # comment rows are skipped.
+const INDEX_URL = 'data/index.json';
 
 // Corps project datum. The winter hold is 20 ft (USACE Seattle District release
 // 26-004). Summer full isn't a fixed number: it comes from the archive.
@@ -108,7 +109,7 @@ function parseReadings(text) {
     if (Number.isFinite(val) && val >= MIN_PLAUSIBLE_FT) rows.push({ at, val, hasTime: m[4] != null });
     if (temp >= TEMP_MIN_F && temp <= TEMP_MAX_F) temps.push({ at, val: temp, hasTime: m[4] != null });
   }
-  if (!rows.length) throw new Error('No readings found in ' + DATA_URL);
+  if (!rows.length) throw new Error('No readings found in the files ' + INDEX_URL + ' lists');
   rows.sort((a, b) => a.at - b.at);
 
   // Spike filter, judged against the unfiltered neighbours.
@@ -992,9 +993,18 @@ function startTemp(T) {
   return { updated: formatUpdated(T.last) };
 }
 
-fetch(DATA_URL, { cache: 'no-cache' })
-  .then((r) => { if (!r.ok) throw new Error('Could not load ' + DATA_URL + ' (HTTP ' + r.status + ')'); return r.text(); })
-  .then((text) => start(parseReadings(text)))
+function fetchText(url, cache) {
+  return fetch(url, { cache })
+    .then((r) => { if (!r.ok) throw new Error('Could not load ' + url + ' (HTTP ' + r.status + ')'); return r.text(); });
+}
+
+// The index and the current year change every scrape, so revalidate them on
+// every load (a cheap 304 when unchanged). Frozen years are served as
+// immutable, so after the first visit they come from the browser cache.
+fetchText(INDEX_URL, 'no-cache')
+  .then((text) => Promise.all(Object.values(JSON.parse(text).years)
+    .map((y) => fetchText(y.key, y.frozen ? 'default' : 'no-cache'))))
+  .then((years) => start(parseReadings(years.join(''))))
   .catch((err) => {
     console.error(err);
     $('updated').textContent = 'Data unavailable';
